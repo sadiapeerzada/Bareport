@@ -1,0 +1,38 @@
+# Compiled binaries (build output named in the Makefile / built ad hoc
+# during development and testing)
+/bareport
+/bareport-race
+/bareport-fresh
+bareport-darwin
+bareport-windows.exe
+bareport-linux
+
+# Coverage / profiling output
+coverage.out
+*.out
+
+# deps-proof.txt is intentionally tracked, not ignored: it's the
+# hackathon submission's required dependency-proof artifact (see
+# README.md's Zero-dependency philosophy section) — regenerate it with
+# `make deps-proof` + `bareport --verify-zero-dep` +
+# `make verify-reproducible` and commit the update, don't just let it
+# silently go stale un-ignored.
+
+# Generated reports / saved scans (developer scratch output, not
+# source — a user running this tool locally shouldn't have their scan
+# results accidentally committed)
+*.html
+!report/html_templates/*.html
+!web/templates/*.html
+baseline.json
+current.json
+report.json
+
+# OS cruft
+.DS_Store
+Thumbs.db
+
+# Editor directories
+.vscode/
+.idea/
+*.swp

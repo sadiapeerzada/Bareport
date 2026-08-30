@@ -1,0 +1,32 @@
+bareport — zero-dependency proof
+==================================
+
+$ make deps-proof
+go list -m all
+bareport
+
+OK: exactly one module in the build graph (zero third-party dependencies)
+
+----------------------------------
+
+$ bareport --verify-zero-dep
+bareport zero-dependency self-audit
+
+  go.mod:               module bareport, go 1.22.2, 0 require lines
+  imports walked:       156
+  outside stdlib:       0
+
+VERIFIED — zero third-party runtime dependencies
+$ echo $?
+0
+
+----------------------------------
+
+$ make verify-reproducible
+go build -trimpath -ldflags="-buildid= -s -w" -o /tmp/bareport-build-a .
+go build -trimpath -ldflags="-buildid= -s -w" -o /tmp/bareport-build-b .
+build A sha256: 1d245c108bae7e29f0f80d94f1c6a7f6093546ae1b8057433c86573439ba7da8
+build B sha256: 1d245c108bae7e29f0f80d94f1c6a7f6093546ae1b8057433c86573439ba7da8
+OK: both builds are byte-identical
+
+Generated 2026-08-29T18:16:58Z on go version go1.22.2 linux/amd64

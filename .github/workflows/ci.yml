@@ -1,0 +1,81 @@
+name: ci
+
+# Runs on every push and PR. Every step below either calls a real
+# `make` target that exists in the Makefile, or a plain `go` command —
+# nothing here invents a target name that isn't actually defined, and
+# nothing here is aspirational. actions/setup-go is CI infrastructure
+# (it downloads and configures the Go toolchain the runner uses to
+# build this project), not a runtime dependency of bareport itself —
+# the same category as the compiler/build-tool exception already
+# understood for this project's zero-dependency claim.
+on:
+  push:
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+
+      - name: go build
+        run: go build ./...
+
+      - name: gofmt check
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "The following files are not gofmt-formatted:"
+            echo "$unformatted"
+            exit 1
+          fi
+          echo "OK: all files are gofmt-formatted"
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: Dependency proof
+        run: |
+          go list -m all > deps-proof.txt
+          cat deps-proof.txt
+          lines=$(wc -l < deps-proof.txt)
+          if [ "$lines" -ne 1 ]; then
+            echo "FAIL: expected exactly 1 module, got $lines — third-party deps present"
+            exit 1
+          fi
+          echo "OK: exactly one module in the build graph"
+
+      - name: Upload deps-proof.txt
+        uses: actions/upload-artifact@v4
+        with:
+          name: deps-proof
+          path: deps-proof.txt
+
+      - name: Reproducible build check
+        run: |
+          go build -trimpath -ldflags="-buildid= -s -w" -o /tmp/bareport-a .
+          go build -trimpath -ldflags="-buildid= -s -w" -o /tmp/bareport-b .
+          hash_a=$(sha256sum /tmp/bareport-a | cut -d' ' -f1)
+          hash_b=$(sha256sum /tmp/bareport-b | cut -d' ' -f1)
+          echo "build A sha256: $hash_a"
+          echo "build B sha256: $hash_b"
+          if [ "$hash_a" != "$hash_b" ]; then
+            echo "FAIL: builds are not reproducible"
+            exit 1
+          fi
+          echo "OK: both builds are byte-identical"
+
+      - name: go test (with coverage)
+        run: go test ./tests/... -coverpkg=./... -cover
+
+      - name: go test -race
+        run: go test -race ./tests/...
+
+      - name: Integration test lab
+        run: make integration-test

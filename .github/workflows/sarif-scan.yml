@@ -1,0 +1,110 @@
+name: sarif-scan
+
+# Feature #9: exercises bareport's existing --format sarif output
+# (report/sarif.go — SARIF 2.1.0, already documented in README.md's
+# "Reports" section) end to end in CI and uploads the result to this
+# repo's GitHub Code Scanning (Security tab), via the standard
+# github/codeql-action/upload-sarif action.
+#
+# What gets scanned: demo-targets/vulnerable-app.go (added for feature
+# #6) — a safe, deterministic, local-only HTTP server built specifically
+# to have realistic, non-destructive findings. This workflow never
+# points bareport at a third-party host: doing that unattended, on
+# every push, against something this repo doesn't own would be both a
+# genuine scanning-etiquette problem and a source of non-deterministic
+# CI results. Scanning bareport's own demo target keeps the SARIF
+# pipeline demonstrably real (a live scan, live findings, live upload)
+# while keeping every request inside 127.0.0.1.
+#
+# actions/checkout, actions/setup-go, and github/codeql-action are CI
+# infrastructure, not a runtime dependency of bareport itself — the
+# same non-runtime-dependency category ci.yml's own header comment
+# already documents for actions/setup-go.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    # Weekly, so the SARIF pipeline itself is still exercised even in
+    # a week with no code changes — catches action-version drift or a
+    # GitHub-side Code Scanning change independently of a push.
+    - cron: "17 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  sarif-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+
+      - name: Build bareport
+        run: go build -o /tmp/bareport .
+
+      - name: Start vulnerable-app demo target
+        run: |
+          go build -o /tmp/vulnerable-app demo-targets/vulnerable-app.go
+          /tmp/vulnerable-app -addr :18090 &
+          # give the listener a moment before the first scan connects
+          for i in $(seq 1 20); do
+            (echo > /dev/tcp/127.0.0.1/18090) >/dev/null 2>&1 && break
+            sleep 0.25
+          done
+
+      - name: Scan and generate SARIF
+        run: |
+          # bareport's exit code encodes finding severity (0/2/3 — see
+          # risk.Result.ExitCode's doc comment), which is expected and
+          # not a scan failure here: the SARIF for those findings has
+          # already been written to stdout before the process exits,
+          # so the exit code is deliberately not treated as job failure.
+          set +e
+          /tmp/bareport --targets 127.0.0.1 --ports 18090 --skip-discovery --no-live \
+            --format sarif > bareport.sarif
+          code=$?
+          set -e
+          echo "bareport exit code: $code (0/2/3 all expected — see risk.Result.ExitCode)"
+          if [ "$code" -gt 3 ]; then
+            echo "unexpected exit code $code — treating as a real scan failure"
+            exit 1
+          fi
+          test -s bareport.sarif || { echo "bareport.sarif is empty"; exit 1; }
+          echo "rules triggered:"
+          grep -o '"ruleId": "[^"]*"' bareport.sarif | sort -u
+
+      - name: Upload SARIF to GitHub Code Scanning
+        # Forked-repo pull requests don't carry security-events: write
+        # permission (a GitHub Actions security boundary, not something
+        # this workflow can opt out of), so the upload step is skipped
+        # for those — the scan above still runs and is checked either
+        # way, only the Code Scanning upload is conditional.
+        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+        id: upload_sarif
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: bareport.sarif
+
+      - name: Note if the Code Scanning upload was skipped
+        # GitHub Code Scanning (what upload-sarif posts to) requires
+        # GitHub Advanced Security to be enabled for private
+        # repositories — a repo Settings toggle, not something this
+        # workflow can turn on itself. Failing the whole job on that
+        # would block every PR on a setting nobody can flip from
+        # inside the workflow, so the upload step above is
+        # non-blocking and this just surfaces why in the log/checks
+        # summary. The scan itself (the previous step, which produced
+        # bareport.sarif) still runs and is still checked on every
+        # PR either way — only the upload is allowed to fail softly.
+        if: steps.upload_sarif.outcome == 'failure'
+        run: |
+          echo "::warning::SARIF was generated successfully but uploading it to GitHub Code Scanning did not succeed (commonly: Code Scanning / GitHub Advanced Security isn't enabled yet for this repository — Settings > Code security and analysis). See the 'Upload SARIF to GitHub Code Scanning' step above for the actual error. This step is intentionally non-blocking."

@@ -1,0 +1,339 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>{{.Title}} — {{.Target}}</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script>
+  // Applied before first paint (blocking, in <head>) so there's no
+  // light-flash on load — same technique and same localStorage key
+  // family as the live web dashboard (web/templates/dashboard.html),
+  // just scoped to this report's own key since it's a separate,
+  // standalone file that may be opened with no server behind it at
+  // all (offline, from disk, or emailed as an attachment).
+  (function () {
+    var saved = null;
+    try { saved = localStorage.getItem('bareport-report-theme'); } catch (e) {}
+    var theme = saved || (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    document.documentElement.setAttribute('data-theme', theme);
+  })();
+</script>
+<style>
+/* Inline, self-contained — no external stylesheet, font, or CDN of any
+   kind. Same restrained "instrument panel" design language as the live
+   web dashboard (web/static/style.css), reproduced here so this single
+   HTML file works completely offline. */
+:root {
+  --bg: #fafbfb; --panel: #ffffff; --ink: #14181c; --ink-muted: #5b6570;
+  --hairline: #e2e6ea; --hairline-strong: #c9d0d6; --accent: #2c4a5e; --accent-soft: #eef2f4;
+  --critical: #a8281f; --critical-bg: #fbeeed;
+  --high: #b0521c; --high-bg: #fbf0e6;
+  --medium: #92620a; --medium-bg: #fbf3e3;
+  --low: #4d6b8a; --low-bg: #eef2f6;
+  --info: #276b46; --info-bg: #ecf5ef;
+  --mono: ui-monospace, "SF Mono", "Menlo", "Consolas", monospace;
+  --sans: -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  color-scheme: light;
+}
+/* Dark variant of the same steel-blue identity above (kept distinct
+   from the live web dashboard's amber accent — see web/static/style.css
+   — so each output reads as its own thing, not a reskin of the other).
+   Severity colors reuse the exact dashboard dark-mode values so a
+   CRITICAL finding looks like the same CRITICAL everywhere bareport
+   renders one. */
+:root[data-theme="dark"] {
+  --bg: #12141a; --panel: #1b1e27; --ink: #e8e6e1; --ink-muted: #9096a3;
+  --hairline: #2a2e38; --hairline-strong: #3a3f4c; --accent: #6fa8d0; --accent-soft: #1c2b35;
+  --critical: #ff6b5e; --critical-bg: #34201d;
+  --high: #ff9f1c; --high-bg: #332912;
+  --medium: #ffc24b; --medium-bg: #332a16;
+  --low: #7fa6d6; --low-bg: #1c2733;
+  --info: #6fcf97; --info-bg: #17281f;
+  color-scheme: dark;
+}
+body { transition: background-color .15s ease, color .15s ease; }
+* { box-sizing: border-box; }
+body { margin:0; background:var(--bg); color:var(--ink); font-family:var(--sans); font-size:15px; line-height:1.55; }
+.wrap { max-width: 1080px; margin:0 auto; padding: 3rem 2rem 5rem; }
+h1 { font-size:1.9rem; font-weight:650; margin:0 0 .3rem; letter-spacing:-.01em; }
+h2 { font-size:1.15rem; font-weight:650; margin: 2.6rem 0 1rem; padding-top: 1.6rem; border-top:1px solid var(--hairline); }
+h2:first-of-type { border-top:none; padding-top:0; }
+.eyebrow { font-family:var(--mono); font-size:.72rem; letter-spacing:.1em; text-transform:uppercase; color:var(--ink-muted); margin:0 0 .5rem; }
+.subhead { color:var(--ink-muted); font-size:.92rem; margin:0 0 1.6rem; }
+table { width:100%; border-collapse:collapse; background:var(--panel); border:1px solid var(--hairline); }
+thead th { text-align:left; font-size:.7rem; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-muted); padding:.55rem .8rem; border-bottom:1px solid var(--hairline-strong); }
+td { padding:.55rem .8rem; font-family:var(--mono); font-size:.84rem; border-bottom:1px solid var(--hairline); vertical-align:top; }
+tr:last-child td { border-bottom:none; }
+.stats { display:flex; flex-wrap:wrap; gap:1px; background:var(--hairline); border:1px solid var(--hairline); margin: 1.5rem 0; }
+.stat { background:var(--panel); padding:1.1rem 1.2rem; flex: 1 1 150px; }
+.stat .n { font-family:var(--mono); font-size:1.6rem; font-weight:600; line-height:1; margin-bottom:.4rem; }
+.stat .label { font-size:.72rem; color:var(--ink-muted); text-transform:uppercase; letter-spacing:.05em; }
+.risk-box { display:flex; align-items:center; gap:2rem; background:var(--panel); border:1px solid var(--hairline); padding:1.5rem 2rem; margin: 1.5rem 0; }
+.risk-score { font-family:var(--mono); font-size:2.6rem; font-weight:700; line-height:1; }
+.risk-level { display:inline-block; font-family:var(--mono); font-size:.85rem; font-weight:700; padding:.25rem .7rem; margin-top:.5rem; letter-spacing:.04em; }
+.level-LOW { color:var(--info); background:var(--info-bg); }
+.level-MODERATE { color:var(--low); background:var(--low-bg); }
+.level-HIGH { color:var(--high); background:var(--high-bg); }
+.level-CRITICAL { color:var(--critical); background:var(--critical-bg); }
+.bars { flex:1; display:flex; flex-direction:column; gap:.4rem; }
+.bar-row { display:flex; align-items:center; gap:.6rem; font-family:var(--mono); font-size:.78rem; }
+.bar-row .bl { width:70px; flex-shrink:0; }
+.bar-row .bv { width:24px; text-align:right; flex-shrink:0; }
+.bar-track { flex:1; height:10px; background:var(--accent-soft); position:relative; }
+.bar-fill { height:100%; }
+.dot { display:inline-block; width:9px; height:9px; margin-right:.5rem; vertical-align:middle; border:1px solid var(--hairline-strong); }
+.dot.sev-critical, .fill-critical { background:var(--critical); border-color:var(--critical); }
+.dot.sev-high, .fill-high { background:var(--high); border-color:var(--high); }
+.dot.sev-medium, .fill-medium { background:var(--medium); border-color:var(--medium); }
+.dot.sev-low, .fill-low { background:var(--low); border-color:var(--low); }
+.dot.sev-info, .fill-info { background:var(--info); border-color:var(--info); }
+.state-open { color:var(--info); }
+.as-panel { display:flex; flex-direction:column; gap:1.1rem; margin: 1.5rem 0; }
+.as-host-name { font-family:var(--mono); font-size:.82rem; font-weight:700; margin-bottom:.5rem; }
+.as-grid { display:flex; flex-wrap:wrap; gap:.6rem; }
+.as-tile { min-width:90px; padding:.5rem .7rem; border:1px solid var(--hairline-strong); border-left:4px solid var(--hairline-strong); background:var(--panel); }
+.as-tile .as-port { font-family:var(--mono); font-size:.95rem; font-weight:700; }
+.as-tile .as-service { font-family:var(--mono); font-size:.66rem; color:var(--ink-muted); text-transform:uppercase; }
+.as-tile.sev-critical { border-left-color:var(--critical); }
+.as-tile.sev-high { border-left-color:var(--high); }
+.as-tile.sev-medium { border-left-color:var(--medium); }
+.as-tile.sev-low { border-left-color:var(--low); }
+.as-tile.sev-info { border-left-color:var(--info); }
+.as-tile.sev-none { border-left-color:var(--hairline-strong); }
+details { border:1px solid var(--hairline); border-top:none; background:var(--panel); }
+details:first-of-type { border-top:1px solid var(--hairline); }
+details > summary { list-style:none; cursor:pointer; padding:.65rem .9rem; font-family:var(--mono); font-size:.85rem; }
+details > summary::-webkit-details-marker { display:none; }
+details > summary::before { content:"› "; color:var(--ink-muted); }
+details[open] > summary::before { content:"⌄ "; }
+.pill { display:inline-block; font-family:var(--mono); font-size:.72rem; padding:.15rem .5rem; border:1px solid var(--hairline-strong); vertical-align:middle; margin-right:.4rem; }
+.finding-title-muted { color:var(--ink-muted); }
+.finding-body { padding: 0 .9rem 1rem 1.8rem; font-size:.86rem; color:var(--ink); }
+.finding-body dl { margin:.6rem 0 0; font-family:var(--mono); font-size:.82rem; }
+.finding-body dl > div { display:flex; gap:1rem; margin-bottom:.3rem; }
+.finding-body dt { color:var(--ink-muted); width:110px; flex-shrink:0; }
+.finding-body dd { margin:0; }
+.empty { color:var(--ink-muted); font-size:.88rem; padding:1rem; background:var(--panel); border:1px solid var(--hairline); }
+footer { margin-top:3rem; color:var(--ink-muted); font-size:.76rem; font-family:var(--mono); }
+ul.recs { margin:0; padding-left:1.3rem; }
+ul.recs li { margin-bottom:.5rem; font-size:.9rem; }
+.report-header { display:flex; align-items:flex-start; justify-content:space-between; gap:1.5rem; }
+.theme-toggle {
+  appearance:none; border:1px solid var(--hairline-strong); background:var(--panel);
+  color:var(--ink); font-family:var(--mono); font-size:.75rem; letter-spacing:.04em;
+  padding:.5rem .8rem; cursor:pointer; flex-shrink:0; margin-top:.2rem;
+}
+.theme-toggle:hover { border-color:var(--accent); color:var(--accent); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="report-header">
+    <div>
+      <p class="eyebrow">Bareport &middot; Security Assessment Report</p>
+      <h1>{{.Target}}</h1>
+      <p class="subhead">Generated {{.GeneratedAt}}{{if .Profile}} &middot; profile: {{.Profile}}{{end}} &middot; scan duration {{.Duration}}</p>
+    </div>
+    <button type="button" class="theme-toggle" id="theme-toggle" aria-label="Toggle color theme">
+      <span id="theme-toggle-label">theme</span>
+    </button>
+  </div>
+
+  <h2 id="executive-summary">1. Executive Summary</h2>
+  <div class="risk-box">
+    <div>
+      <div class="risk-score">{{.Risk.Score}}<span style="font-size:1rem;color:var(--ink-muted);">/100</span></div>
+      <div class="risk-level level-{{.Risk.Level}}">{{.Risk.Level}} RISK</div>
+    </div>
+    <div class="bars">
+      <div class="bar-row"><span class="bl">CRITICAL</span><div class="bar-track"><div class="bar-fill fill-critical" style="width:{{.Risk.CriticalPct}}%"></div></div><span class="bv">{{.Risk.Critical}}</span></div>
+      <div class="bar-row"><span class="bl">HIGH</span><div class="bar-track"><div class="bar-fill fill-high" style="width:{{.Risk.HighPct}}%"></div></div><span class="bv">{{.Risk.High}}</span></div>
+      <div class="bar-row"><span class="bl">MEDIUM</span><div class="bar-track"><div class="bar-fill fill-medium" style="width:{{.Risk.MediumPct}}%"></div></div><span class="bv">{{.Risk.Medium}}</span></div>
+      <div class="bar-row"><span class="bl">LOW</span><div class="bar-track"><div class="bar-fill fill-low" style="width:{{.Risk.LowPct}}%"></div></div><span class="bv">{{.Risk.Low}}</span></div>
+      <div class="bar-row"><span class="bl">INFO</span><div class="bar-track"><div class="bar-fill fill-info" style="width:{{.Risk.InfoPct}}%"></div></div><span class="bv">{{.Risk.Info}}</span></div>
+    </div>
+  </div>
+  <p class="subhead">The Bareport Risk Score is a deterministic, documented point-weighted score (not CVSS) computed from the findings below. See STDLIB.md / README.md for the exact weighting.</p>
+
+  <h2 id="risk-breakdown">3a. Risk Score Breakdown by Category</h2>
+  <p class="subhead">The same point-weighted findings behind the score above, grouped by category (Network, TLS, HTTP, DNS) so it's clear which part of the target is actually driving the number — not a second scoring model, just the first one broken out.</p>
+  {{if .RiskBreakdown}}
+  <div class="bars">
+    {{range .RiskBreakdown}}
+    <div class="bar-row"><span class="bl">{{.Category}}</span><div class="bar-track"><div class="bar-fill fill-medium" style="width:{{.Pct}}%"></div></div><span class="bv">{{.Points}} pts &middot; {{.Total}} finding{{if ne .Total 1}}s{{end}}</span></div>
+    {{end}}
+  </div>
+  {{else}}<div class="empty">No findings — nothing to break down.</div>{{end}}
+
+  <h2 id="target-info">2. Target Information</h2>
+  <div class="stats">
+    <div class="stat"><div class="n">{{.Summary.HostsScanned}}</div><div class="label">Hosts Scanned</div></div>
+    <div class="stat"><div class="n">{{.Summary.HostsAlive}}</div><div class="label">Hosts Alive</div></div>
+    <div class="stat"><div class="n">{{.Summary.PortsOpen}}</div><div class="label">Open Ports</div></div>
+    <div class="stat"><div class="n">{{len .Services}}</div><div class="label">Services</div></div>
+    <div class="stat"><div class="n">{{len .Findings}}</div><div class="label">Findings</div></div>
+  </div>
+
+  <h2 id="severity-distribution">3 &amp; 4. Risk Score &amp; Severity Distribution</h2>
+  <p class="subhead">See the executive summary above — the score and distribution chart there are this report's single source of truth for both sections, rather than repeating identical numbers twice.</p>
+
+  <h2 id="hosts">5. Hosts</h2>
+  <table>
+    <thead><tr><th>Host</th><th>Status</th><th>Open Ports</th></tr></thead>
+    <tbody>
+      {{range .Hosts}}
+      <tr><td>{{.Host}}</td><td class="{{if .Alive}}state-open{{end}}">{{if .Alive}}alive{{else}}no response{{end}}</td><td>{{len .Ports}}</td></tr>
+      {{end}}
+    </tbody>
+  </table>
+
+  <h2 id="open-ports">6. Open Ports</h2>
+  <table>
+    <thead><tr><th>Host</th><th>Port</th><th>Proto</th><th>State</th></tr></thead>
+    <tbody>
+      {{range .Hosts}}{{$host := .Host}}{{range .Ports}}
+      <tr><td>{{$host}}</td><td>{{.Port}}</td><td>{{.Protocol}}</td><td class="{{if eq (print .State) "open"}}state-open{{end}}">{{.State}}</td></tr>
+      {{end}}{{end}}
+    </tbody>
+  </table>
+
+  <h2 id="attack-surface">6a. Attack Surface</h2>
+  <p class="subhead">Every open port across every host, colored by the worst finding severity attached to that specific port. Complements the Open Ports table above and the Detected Services table below — not a replacement for either.</p>
+  {{if .AttackSurface}}
+  <div class="as-panel">
+    {{range .AttackSurface}}
+    <div>
+      <div class="as-host-name">{{.Host}}</div>
+      <div class="as-grid">
+        {{range .Ports}}
+        <div class="as-tile {{.SevClass}}" title="{{.Protocol}}/{{.Port}} — {{.Service}}{{if .Severity}} — worst: {{.Severity}}{{end}}">
+          <div class="as-port">{{.Port}}</div>
+          <div class="as-service">{{.Service}}</div>
+        </div>
+        {{end}}
+      </div>
+    </div>
+    {{end}}
+  </div>
+  {{else}}<div class="empty">No open ports — nothing exposed.</div>{{end}}
+
+  <h2 id="services">7. Detected Services</h2>
+  {{if .Services}}
+  <table>
+    <thead><tr><th>Host</th><th>Port</th><th>Protocol</th><th>Service</th></tr></thead>
+    <tbody>
+      {{range .Services}}
+      <tr><td>{{.Host}}</td><td>{{.Port}}</td><td>{{.Protocol}}</td><td>{{.Service}}</td></tr>
+      {{end}}
+    </tbody>
+  </table>
+  {{else}}<div class="empty">No services detected.</div>{{end}}
+
+  <h2 id="tls-findings">8. TLS Findings</h2>
+  {{if .TLSFindings}}
+  {{range .TLSFindings}}
+  <details>
+    <summary><span class="dot {{.SevClass}}"></span><span class="pill">{{.Severity}}</span>&nbsp; {{.Title}} &nbsp;<span style="color:var(--ink-muted)">({{.Target}}{{if .Port}}:{{.Port}}{{end}})</span></summary>
+    <div class="finding-body">
+      <p>{{.Description}}</p>
+      <dl><div><dt>Evidence</dt><dd>{{.Evidence}}</dd></div><div><dt>Remediation</dt><dd>{{.Remediation}}</dd></div></dl>
+    </div>
+  </details>
+  {{end}}
+  {{else}}<div class="empty">No TLS findings.</div>{{end}}
+
+  <h2 id="http-findings">9. HTTP Findings</h2>
+  {{if .HTTPFindings}}
+  {{range .HTTPFindings}}
+  <details>
+    <summary><span class="dot {{.SevClass}}"></span><span class="pill">{{.Severity}}</span>&nbsp; {{.Title}} &nbsp;<span style="color:var(--ink-muted)">({{.Target}}{{if .Port}}:{{.Port}}{{end}})</span></summary>
+    <div class="finding-body">
+      <p>{{.Description}}</p>
+      <dl><div><dt>Evidence</dt><dd>{{.Evidence}}</dd></div><div><dt>Remediation</dt><dd>{{.Remediation}}</dd></div></dl>
+    </div>
+  </details>
+  {{end}}
+  {{else}}<div class="empty">No HTTP findings.</div>{{end}}
+
+  <h2 id="dns-findings">10. DNS Findings</h2>
+  {{if .DNSFindings}}
+  <table>
+    <thead><tr><th>Host</th><th>Addresses</th><th>MX</th><th>SPF</th><th>DMARC</th></tr></thead>
+    <tbody>
+      {{range .DNSFindings}}
+      <tr><td>{{.Host}}</td><td>{{range .Addresses}}{{.}} {{end}}</td><td>{{range .MXRecords}}{{.}} {{end}}</td><td>{{if .HasSPF}}present{{else}}missing{{end}}</td><td>{{if .HasDMARC}}present{{else}}missing{{end}}</td></tr>
+      {{end}}
+    </tbody>
+  </table>
+  {{else}}<div class="empty">No DNS reconnaissance data (run with --dns to include it).</div>{{end}}
+
+  <h2 id="findings">11 &amp; 12. Security Findings &amp; Evidence</h2>
+  {{if .Findings}}
+  {{range .Findings}}
+  <details>
+    <summary><span class="dot {{.SevClass}}"></span><span class="pill">{{.Severity}}</span>&nbsp; {{.Title}} &nbsp;<span style="color:var(--ink-muted)">({{.Target}}{{if .Port}}:{{.Port}}{{end}})</span></summary>
+    <div class="finding-body">
+      <p>{{.Description}}</p>
+      <dl>
+        <div><dt>Evidence</dt><dd>{{.Evidence}}</dd></div>
+        <div><dt>Remediation</dt><dd>{{.Remediation}}</dd></div>
+        <div><dt>Finding ID</dt><dd>{{.ID}}</dd></div>
+      </dl>
+    </div>
+  </details>
+  {{end}}
+  {{else}}<div class="empty">No findings — nothing to report.</div>{{end}}
+
+  <h2 id="recommendations">13. Recommendations</h2>
+  {{if .Recommendations}}
+  <ul class="recs">
+    {{range .Recommendations}}<li>{{.}}</li>{{end}}
+  </ul>
+  {{else}}<div class="empty">No outstanding recommendations.</div>{{end}}
+
+  <h2 id="scan-metadata">14. Scan Metadata</h2>
+  <table>
+    <tbody>
+      <tr><td>Target</td><td>{{.Target}}</td></tr>
+      <tr><td>Profile</td><td>{{if .Profile}}{{.Profile}}{{else}}(default){{end}}</td></tr>
+      <tr><td>Duration</td><td>{{.Duration}}</td></tr>
+      <tr><td>Generated</td><td>{{.GeneratedAt}}</td></tr>
+      <tr><td>Generated by</td><td>bareport — zero-dependency network security assessment tool</td></tr>
+      <tr>
+        <td>Zero-dependency self-audit</td>
+        <td>
+          {{if .ZeroDep.Verified}}<span class="pill" style="background:#0f5132;color:#d1fae5;">VERIFIED</span> — {{.ZeroDep.ImportsWalked}} imports walked, 0 outside the Go standard library
+          {{else}}<span class="pill" style="background:#7f1d1d;color:#fee2e2;">FAILED</span> — {{len .ZeroDep.OutsideStdlib}} import(s) outside the standard library
+          {{end}}
+          (same check as <code>bareport --verify-zero-dep</code>, run fresh for this report)
+        </td>
+      </tr>
+    </tbody>
+  </table>
+
+  <footer>Report generated entirely offline by bareport (Go standard library only). No external service, font, script, or stylesheet was contacted to render this page.</footer>
+</div>
+<script>
+  (function () {
+    var root = document.documentElement;
+    var btn = document.getElementById('theme-toggle');
+    var label = document.getElementById('theme-toggle-label');
+
+    function render() {
+      var current = root.getAttribute('data-theme') || 'light';
+      label.textContent = current === 'dark' ? 'light mode' : 'dark mode';
+    }
+    render();
+
+    btn.addEventListener('click', function () {
+      var current = root.getAttribute('data-theme') || 'light';
+      var next = current === 'dark' ? 'light' : 'dark';
+      root.setAttribute('data-theme', next);
+      try { localStorage.setItem('bareport-report-theme', next); } catch (e) {}
+      render();
+    });
+  })();
+</script>
+</body>
+</html>

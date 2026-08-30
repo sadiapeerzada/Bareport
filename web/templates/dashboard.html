@@ -1,0 +1,526 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>bareport — scan report</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="/static/style.css">
+  <script>
+    // Applied before first paint (blocking, in <head>) so there is no
+    // light-flash on load — reads the persisted choice, or falls back
+    // to the OS preference, before any CSS has rendered.
+    (function () {
+      var saved = null;
+      try { saved = localStorage.getItem('bareport-theme'); } catch (e) {}
+      var theme = saved || (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      document.documentElement.setAttribute('data-theme', theme);
+    })();
+  </script>
+</head>
+<body>
+  <div class="wrap" id="viewRoot" data-view="report">
+
+    <div class="topbar">
+      <div class="brand-block">
+        <div class="brand-row">
+          <p class="brand-mark">BAREPORT</p>
+          <p class="eyebrow" style="margin:0;">scan report</p>
+        </div>
+        <p class="brand-tagline">A zero-dependency security reconnaissance and attack-surface assessment tool built entirely with the Go standard library.</p>
+      </div>
+      <div class="controls">
+        <div class="mode-toggle" role="group" aria-label="View mode">
+          <button type="button" id="btn-home" aria-pressed="false">HOME</button>
+          <button type="button" id="btn-live" class="is-live" aria-pressed="false">LIVE</button>
+          <button type="button" id="btn-report" aria-pressed="true">REPORT</button>
+        </div>
+        <button type="button" class="theme-toggle" id="theme-toggle" aria-label="Toggle color theme">
+          <span id="theme-toggle-label">theme</span>
+        </button>
+      </div>
+    </div>
+
+    <div id="home-view">
+      <div class="home-hero">
+        <h1 class="home-title">Bareport</h1>
+        <p class="home-lede">A zero-dependency security reconnaissance and attack-surface assessment tool for hosts and services on your network &mdash; built entirely on the Go standard library.</p>
+      </div>
+
+      <h2 class="section-heading">What Bareport Does</h2>
+      <div class="home-grid">
+        <div class="home-card">
+          <div class="home-card-title">Network &amp; Service Discovery</div>
+          <div class="home-card-body">TCP/UDP port scanning, service banner grabbing, TTL-based OS fingerprinting, and local-subnet auto-discovery.</div>
+        </div>
+        <div class="home-card">
+          <div class="home-card-title">TLS &amp; HTTP Auditing</div>
+          <div class="home-card-body">Certificate validity, expiry, and self-signed checks; cipher/version inspection; HTTP security-header audits.</div>
+        </div>
+        <div class="home-card">
+          <div class="home-card-title">DNS Reconnaissance</div>
+          <div class="home-card-body">MX/TXT/SPF/DMARC lookups and reverse DNS for every target, alongside the port scan.</div>
+        </div>
+        <div class="home-card">
+          <div class="home-card-title">Risk Scoring &amp; Findings</div>
+          <div class="home-card-body">Every result runs through a findings engine and rolls up into a single 0&ndash;100 risk score with remediation guidance.</div>
+        </div>
+      </div>
+
+      <h2 class="section-heading">Why Bareport</h2>
+      <div class="home-why">
+        <div class="home-why-label">Zero Third-Party Dependencies</div>
+        <p>No third-party Go modules &mdash; not for scanning, TLS, HTTP, DNS, JSON, or the dashboard you're looking at right now. <code>go.mod</code> has zero <code>require</code> lines, and the claim is independently checkable: run <code>bareport --verify-zero-dep</code> or inspect the generated <code>deps-proof.txt</code>.</p>
+      </div>
+
+      <h2 class="section-heading">Quick Start</h2>
+      <div class="home-quickstart">
+        <div class="qs-row"><code>bareport --targets 127.0.0.1 --ports 80,443</code><span class="qs-desc">run a scan and print a report to the terminal</span></div>
+        <div class="qs-row"><code>bareport --targets 127.0.0.1 --ports 80,443 --serve</code><span class="qs-desc">run a scan and launch this dashboard against it</span></div>
+        <div class="qs-row"><code>bareport --targets 127.0.0.1 --watch</code><span class="qs-desc">re-scan on an interval and report drift over time</span></div>
+        <div class="qs-row"><code>bareport --verify-zero-dep</code><span class="qs-desc">prove the zero-dependency claim at runtime</span></div>
+      </div>
+
+      <div class="home-cta">
+        <button type="button" class="btn-primary" id="btn-enter-report">View Scan Report &rarr;</button>
+      </div>
+      <p class="subhead">Once you're viewing a scan, use the <strong>LIVE</strong> / <strong>REPORT</strong> toggle above to watch it run in real time or drill into the full findings and open-ports tables.</p>
+    </div>
+
+    <div id="scan-summary">
+
+    <div class="context-strip">
+      <div class="ctx-cell">
+        <div class="ctx-label">Target</div>
+        <div class="ctx-value">{{if .Target}}{{.Target}}{{else}}&mdash;{{end}}</div>
+      </div>
+      <div class="ctx-cell">
+        <div class="ctx-label">Scan status</div>
+        <div class="ctx-value"><span class="status-dot"></span>complete</div>
+      </div>
+      <div class="ctx-cell">
+        <div class="ctx-label">Scan time</div>
+        <div class="ctx-value">{{.GeneratedAt}}</div>
+      </div>
+      <div class="ctx-cell">
+        <div class="ctx-label">Mode</div>
+        <div class="ctx-value" id="ctx-mode">report</div>
+      </div>
+      <div class="ctx-cell">
+        <div class="ctx-label">Zero-dependency self-audit</div>
+        <div class="ctx-value">
+          <span class="zerodep-badge {{if .ZeroDep.Verified}}zerodep-verified{{else}}zerodep-failed{{end}}">
+            <span class="zd-pill">{{if .ZeroDep.Verified}}VERIFIED{{else}}FAILED{{end}}</span>
+            <span class="zd-detail">{{if .ZeroDep.Verified}}{{.ZeroDep.ImportsWalked}} imports, 0 outside stdlib{{else}}{{len .ZeroDep.OutsideStdlib}} outside stdlib{{end}}</span>
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <div class="run-box">
+      <span class="run-label">Run it yourself</span>
+      <code>$ bareport --targets 127.0.0.1 --ports 80,443</code>
+      <code>$ bareport --targets 127.0.0.1 --ports 80,443 --serve</code>
+    </div>
+
+    <p class="subhead">Generated {{.GeneratedAt}} &middot; duration {{.Duration}}{{if .HasDiff}} &middot; <a href="/diff">view diff vs. previous scan</a>{{end}}</p>
+    <div class="scanline"></div>
+
+    <div class="stats">
+      <div class="stat">
+        <div class="n">{{.Summary.HostsScanned}}</div>
+        <div class="label">Hosts scanned</div>
+      </div>
+      <div class="stat">
+        <div class="n">{{.Summary.HostsAlive}}</div>
+        <div class="label">Hosts alive</div>
+      </div>
+      <div class="stat">
+        <div class="n">{{.Summary.PortsOpen}}</div>
+        <div class="label">Open ports</div>
+      </div>
+      <div class="stat">
+        <div class="n">{{.ServiceCount}}</div>
+        <div class="label">Services</div>
+      </div>
+      <div class="stat">
+        <div class="n">{{len .FindingRows}}</div>
+        <div class="label">Findings</div>
+      </div>
+    </div>
+
+    <div id="live-view">
+      <h2 class="section-heading">Live Scan</h2>
+      <div class="live-panel">
+        <div class="live-panel-head">
+          <span class="live-pulse"></span>
+          scan complete &middot; showing final snapshot
+        </div>
+        <div class="live-grid">
+          <div>
+            <div class="lg-label">Target</div>
+            <div class="lg-value">{{if .Target}}{{.Target}}{{else}}&mdash;{{end}}</div>
+          </div>
+          <div>
+            <div class="lg-label">Hosts</div>
+            <div class="lg-value">{{.Summary.HostsAlive}}/{{.Summary.HostsScanned}}</div>
+          </div>
+          <div>
+            <div class="lg-label">Open ports</div>
+            <div class="lg-value">{{.Summary.PortsOpen}}</div>
+          </div>
+          <div>
+            <div class="lg-label">Findings so far</div>
+            <div class="lg-value">{{len .FindingRows}}</div>
+          </div>
+          <div>
+            <div class="lg-label">Elapsed</div>
+            <div class="lg-value">{{.Duration}}</div>
+          </div>
+        </div>
+        <div class="live-feed">
+          {{range .FindingRows}}
+          <div class="live-feed-row">
+            <span class="lf-sev fdot {{.SevClass}}"></span>
+            <span>{{.Title}} &middot; {{.Host}}{{if .Port}}:{{.Port}}{{end}}</span>
+          </div>
+          {{end}}
+          {{if not .FindingRows}}<div class="live-feed-row">no findings discovered</div>{{end}}
+        </div>
+      </div>
+      <p class="subhead">Bareport's live terminal view (<code>bareport --targets ... </code> without <code>--serve</code>) redraws in place while a scan runs. This panel mirrors that same run once it reaches the dashboard — switch to REPORT for the full breakdown.</p>
+    </div>
+
+    <div id="report-view">
+
+    <h2 class="section-heading">Risk Overview</h2>
+    <div class="risk-overview">
+      <div class="risk-gauge risk-gauge-{{.Risk.Level}}" style="--pct: {{.Risk.Score}};">
+        <div class="risk-gauge-inner">
+          <div class="risk-num">{{.Risk.Score}}</div>
+          <div class="risk-of">/ 100</div>
+        </div>
+      </div>
+      <div class="risk-meta">
+        <div>
+          <div class="risk-label-eyebrow">Risk score</div>
+          <div class="risk-score-big">{{.Risk.Score}}<span class="of100">/100</span></div>
+          <div class="risk-level-badge risk-{{.Risk.Level}}">{{.Risk.Level}}</div>
+        </div>
+      </div>
+      <div class="sev-count-row">
+        <span class="sc"><span class="fdot fsev-critical"></span>CRITICAL <span class="n">{{.Risk.Critical}}</span></span>
+        <span class="sc"><span class="fdot fsev-high"></span>HIGH <span class="n">{{.Risk.High}}</span></span>
+        <span class="sc"><span class="fdot fsev-medium"></span>MEDIUM <span class="n">{{.Risk.Medium}}</span></span>
+        <span class="sc"><span class="fdot fsev-low"></span>LOW <span class="n">{{.Risk.Low}}</span></span>
+        <span class="sc"><span class="fdot fsev-info"></span>INFO <span class="n">{{.Risk.Info}}</span></span>
+      </div>
+    </div>
+
+    <h2 class="section-heading">Risk Score Breakdown</h2>
+    <p class="subhead">The same findings behind the score above, grouped by category — not a second score, just the first one broken out so it's clear what's actually driving it.</p>
+    <div class="breakdown-panel">
+      {{range .RiskBreakdown}}
+      <div class="breakdown-row">
+        <span class="breakdown-cat">{{.Category}}</span>
+        <div class="breakdown-track"><div class="breakdown-fill" style="width:{{.Pct}}%"></div></div>
+        <span class="breakdown-val">{{.Points}} pts &middot; {{.Total}} finding{{if ne .Total 1}}s{{end}}</span>
+      </div>
+      {{end}}
+      {{if not .RiskBreakdown}}<div class="empty">No findings — nothing to break down.</div>{{end}}
+    </div>
+
+    <h2 class="section-heading">Attack Surface</h2>
+    <p class="subhead">Every open port across every host, at a glance — colored by the worst finding severity attached to that specific port. Complements the Open Ports table below rather than replacing it.</p>
+    <div class="attack-surface-panel">
+      {{range .AttackSurface}}
+      <div class="as-host">
+        <div class="as-host-name">{{.Host}}</div>
+        <div class="as-grid">
+          {{range .Ports}}
+          <div class="as-tile {{asClass .Severity}}" title="{{.Protocol}}/{{.Port}} &middot; {{.Service}}{{if .Severity}} &middot; worst: {{.Severity}}{{end}}">
+            <div class="as-port">{{.Port}}</div>
+            <div class="as-service">{{.Service}}</div>
+            <div class="as-count">{{if gt .FindingCount 0}}{{.FindingCount}} finding{{if ne .FindingCount 1}}s{{end}}{{else}}no findings{{end}}</div>
+          </div>
+          {{end}}
+        </div>
+      </div>
+      {{end}}
+      {{if not .AttackSurface}}<div class="empty">No open ports — nothing exposed.</div>{{end}}
+    </div>
+
+    <h2 class="section-heading">Security Findings</h2>
+    <div class="filterbar">
+      <span class="chip" data-filter-group="finding" data-filter="all" data-active="true">all</span>
+      <span class="chip" data-filter-group="finding" data-filter="fsev-critical">critical</span>
+      <span class="chip" data-filter-group="finding" data-filter="fsev-high">high</span>
+      <span class="chip" data-filter-group="finding" data-filter="fsev-medium">medium</span>
+      <span class="chip" data-filter-group="finding" data-filter="fsev-low">low</span>
+      <span class="chip" data-filter-group="finding" data-filter="fsev-info">info</span>
+    </div>
+
+    <table id="findings-table">
+      <thead>
+        <tr>
+          <th data-sort="fsev">Severity</th>
+          <th data-sort="ftitle">Finding</th>
+          <th data-sort="fhost">Host</th>
+          <th data-sort="fport">Port</th>
+          <th>Evidence</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{range .FindingRows}}
+        <tr class="row" data-fsev="{{.SevClass}}" data-fhost="{{.Host}}" data-fport="{{.Port}}" data-ftitle="{{.Title}}">
+          <td><span class="fdot {{.SevClass}}"></span>{{.Severity}}</td>
+          <td class="host">{{.Title}}</td>
+          <td>{{.Host}}</td>
+          <td>{{if .Port}}{{.Port}}{{else}}&mdash;{{end}}</td>
+          <td>{{.Evidence}}</td>
+        </tr>
+        <tr class="detail-row" data-fsev="{{.SevClass}}" data-fhost="{{.Host}}" data-fport="{{.Port}}">
+          <td colspan="5">
+            <details>
+              <summary>details</summary>
+              <div class="detail-body">
+                <dl>
+                  <dt>description</dt><dd>{{.Description}}</dd>
+                  <dt>evidence</dt><dd>{{.Evidence}}</dd>
+                  <dt>finding id</dt><dd>{{.ID}}</dd>
+                </dl>
+                <div class="remediation-line"><span class="rlabel">recommendation</span>{{.Remediation}}</div>
+              </div>
+            </details>
+          </td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+    {{if not .FindingRows}}<p class="subhead">No findings.</p>{{end}}
+
+    <h2 class="section-heading">Open Ports</h2>
+    <div class="filterbar">
+      <span class="chip" data-filter-group="port" data-filter="all" data-active="true">all</span>
+      <span class="chip" data-filter-group="port" data-filter="sev-critical">critical</span>
+      <span class="chip" data-filter-group="port" data-filter="sev-warning">warning</span>
+      <span class="chip" data-filter-group="port" data-filter="sev-info">info</span>
+      <span class="chip" data-filter-group="port" data-filter="sev-none">clean</span>
+      <span class="filter-spacer"></span>
+      <input class="search" id="search" type="text" placeholder="filter by host or port&hellip;">
+    </div>
+
+    <table id="ports-table">
+      <thead>
+        <tr>
+          <th data-sort="sev">Severity</th>
+          <th data-sort="host">Host</th>
+          <th data-sort="port">Port</th>
+          <th data-sort="proto">Proto</th>
+          <th data-sort="state">State</th>
+          <th data-sort="service">Service</th>
+          <th>Notes</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{range $i, $row := .Rows}}
+        <tr class="row {{$row.SevClass}}"
+            data-sev="{{$row.SevClass}}"
+            data-host="{{$row.Host}}"
+            data-port="{{$row.Port}}"
+            data-proto="{{$row.Protocol}}"
+            data-state="{{$row.State}}"
+            data-service="{{$row.Service}}">
+          <td><span class="dot"></span>{{$row.Severity}}</td>
+          <td class="host">{{$row.Host}}</td>
+          <td>{{$row.Port}}</td>
+          <td>{{$row.Protocol}}</td>
+          <td class="{{$row.StateClass}}">{{$row.State}}</td>
+          <td>{{$row.Service}}</td>
+          <td>
+            {{if $row.Findings}}{{(index $row.Findings 0).Message}}{{if gt (len $row.Findings) 1}} (+{{len $row.Findings}} total){{end}}{{else}}&mdash;{{end}}
+          </td>
+        </tr>
+        <tr class="detail-row" data-sev="{{$row.SevClass}}" data-host="{{$row.Host}}" data-port="{{$row.Port}}" data-proto="{{$row.Protocol}}" data-state="{{$row.State}}" data-service="{{$row.Service}}">
+          <td colspan="7">
+            <details>
+              <summary>details</summary>
+              <div class="detail-body">
+                <dl>
+                  {{if $row.Banner}}
+                  <dt>banner</dt><dd>{{if $row.Banner.Raw}}{{$row.Banner.Raw}}{{else}}{{$row.Banner.HexDump}} (hex){{end}}</dd>
+                  {{end}}
+                  {{if $row.Fingerprint}}
+                  <dt>ttl</dt><dd>{{$row.Fingerprint.TTL}}</dd>
+                  <dt>os guess</dt><dd>{{$row.Fingerprint.OSGuess}}</dd>
+                  {{end}}
+                  {{if $row.TLS}}
+                  <dt>tls version</dt><dd>{{$row.TLS.Version}}</dd>
+                  <dt>cipher</dt><dd>{{$row.TLS.CipherSuite}}</dd>
+                  <dt>subject</dt><dd>{{$row.TLS.Subject}}</dd>
+                  <dt>issuer</dt><dd>{{$row.TLS.Issuer}}</dd>
+                  <dt>expires</dt><dd>{{$row.TLS.NotAfter.Format "2006-01-02"}} ({{$row.TLS.DaysUntilExpiry}} days)</dd>
+                  <dt>self-signed</dt><dd>{{$row.TLS.SelfSigned}}</dd>
+                  {{if $row.TLS.SANs}}<dt>sans</dt><dd>{{range $row.TLS.SANs}}{{.}} {{end}}</dd>{{end}}
+                  {{end}}
+                  {{if $row.HTTP}}
+                  <dt>http status</dt><dd>{{$row.HTTP.StatusCode}}</dd>
+                  <dt>server</dt><dd>{{if $row.HTTP.Server}}{{$row.HTTP.Server}}{{else}}&mdash;{{end}}</dd>
+                  <dt>final url</dt><dd>{{$row.HTTP.FinalURL}}</dd>
+                  {{if $row.HTTP.AllowedMethods}}<dt>methods</dt><dd>{{range $row.HTTP.AllowedMethods}}{{.}} {{end}}</dd>{{end}}
+                  {{end}}
+                </dl>
+                {{if $row.Findings}}
+                <p style="margin-top:0.8rem;">
+                  {{range $row.Findings}}
+                  <div class="finding-line">[{{.Severity}}] {{.Rule}}: {{.Message}}</div>
+                  {{end}}
+                </p>
+                {{end}}
+              </div>
+            </details>
+          </td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+
+    </div>
+
+    </div>
+
+    <footer>bareport &middot; zero-dependency network reconnaissance &middot; report served locally, not stored externally</footer>
+  </div>
+
+  <script>
+    // Vanilla JS only, inline, no external script — client-side sort
+    // and filter over rows already rendered server-side, plus the
+    // theme toggle and the LIVE/REPORT view toggle added in this
+    // round of dashboard UI work. Deliberately kept minimal: this is
+    // UX polish on top of a fully functional no-JS page (the
+    // <details> elements work with zero script, and REPORT is the
+    // default visible view even if this script fails to load).
+
+    // ---- theme toggle ----
+    (function () {
+      var root = document.documentElement;
+      var btn = document.getElementById('theme-toggle');
+      var label = document.getElementById('theme-toggle-label');
+
+      function render() {
+        var current = root.getAttribute('data-theme') || 'light';
+        label.textContent = current === 'dark' ? 'light mode' : 'dark mode';
+      }
+      render();
+
+      btn.addEventListener('click', function () {
+        var current = root.getAttribute('data-theme') || 'light';
+        var next = current === 'dark' ? 'light' : 'dark';
+        root.setAttribute('data-theme', next);
+        try { localStorage.setItem('bareport-theme', next); } catch (e) {}
+        render();
+      });
+    })();
+
+    // ---- home/live/report toggle ----
+    (function () {
+      var viewRoot = document.getElementById('viewRoot');
+      var btnHome = document.getElementById('btn-home');
+      var btnLive = document.getElementById('btn-live');
+      var btnReport = document.getElementById('btn-report');
+      var btnEnterReport = document.getElementById('btn-enter-report');
+      var ctxMode = document.getElementById('ctx-mode');
+
+      function setView(view) {
+        viewRoot.setAttribute('data-view', view);
+        btnHome.setAttribute('aria-pressed', String(view === 'home'));
+        btnLive.setAttribute('aria-pressed', String(view === 'live'));
+        btnReport.setAttribute('aria-pressed', String(view === 'report'));
+        ctxMode.textContent = view;
+        try { localStorage.setItem('bareport-view', view); } catch (e) {}
+      }
+
+      // First-time visitors land on HOME so the overview is what they
+      // see immediately; a saved choice (from a previous visit, e.g.
+      // after switching to LIVE/REPORT) is respected on reload.
+      var saved = null;
+      try { saved = localStorage.getItem('bareport-view'); } catch (e) {}
+      setView(saved === 'live' || saved === 'report' ? saved : 'home');
+
+      btnHome.addEventListener('click', function () { setView('home'); });
+      btnLive.addEventListener('click', function () { setView('live'); });
+      btnReport.addEventListener('click', function () { setView('report'); });
+      if (btnEnterReport) btnEnterReport.addEventListener('click', function () { setView('report'); });
+    })();
+
+    // ---- table sort/filter (unchanged from the pre-redesign dashboard) ----
+    function wireTable(opts) {
+      var table = document.getElementById(opts.tableId);
+      if (!table) return;
+      var tbody = table.querySelector('tbody');
+      var rows = Array.prototype.slice.call(tbody.querySelectorAll('tr.row'));
+      var chips = document.querySelectorAll('.chip[data-filter-group="' + opts.filterGroup + '"]');
+      var searchEl = opts.searchId ? document.getElementById(opts.searchId) : null;
+
+      function detailFor(row) { return row.nextElementSibling; }
+
+      function applyFilters() {
+        var activeChip = document.querySelector('.chip[data-filter-group="' + opts.filterGroup + '"][data-active="true"]');
+        var activeFilter = activeChip ? activeChip.dataset.filter : 'all';
+        var q = searchEl ? searchEl.value.trim().toLowerCase() : '';
+        rows.forEach(function (row) {
+          var sevMatch = activeFilter === 'all' || row.dataset[opts.sevKey] === activeFilter;
+          var text = opts.searchKeys.map(function (k) { return row.dataset[k] || ''; }).join(':').toLowerCase();
+          var searchMatch = q === '' || text.indexOf(q) !== -1;
+          var show = sevMatch && searchMatch;
+          row.style.display = show ? '' : 'none';
+          detailFor(row).style.display = show ? '' : 'none';
+        });
+      }
+
+      chips.forEach(function (chip) {
+        chip.addEventListener('click', function () {
+          chips.forEach(function (c) { c.dataset.active = 'false'; });
+          chip.dataset.active = 'true';
+          applyFilters();
+        });
+      });
+      if (searchEl) searchEl.addEventListener('input', applyFilters);
+
+      var sortState = {};
+      table.querySelectorAll('th[data-sort]').forEach(function (th) {
+        th.addEventListener('click', function () {
+          var key = th.dataset.sort;
+          sortState[key] = !sortState[key];
+          var asc = sortState[key];
+          rows.sort(function (a, b) {
+            var va, vb;
+            if (key === opts.sevSortKey) { va = opts.sevOrder[a.dataset[opts.sevKey]]; vb = opts.sevOrder[b.dataset[opts.sevKey]]; }
+            else if (opts.numericKeys.indexOf(key) !== -1) { va = parseInt(a.dataset[key], 10) || 0; vb = parseInt(b.dataset[key], 10) || 0; }
+            else { va = (a.dataset[key] || '').toLowerCase(); vb = (b.dataset[key] || '').toLowerCase(); }
+            if (va < vb) return asc ? -1 : 1;
+            if (va > vb) return asc ? 1 : -1;
+            return 0;
+          });
+          rows.forEach(function (row) {
+            tbody.appendChild(row);
+            tbody.appendChild(detailFor(row));
+          });
+        });
+      });
+    }
+
+    wireTable({
+      tableId: 'ports-table', filterGroup: 'port', searchId: 'search',
+      sevKey: 'sev', sevSortKey: 'sev', searchKeys: ['host', 'port'], numericKeys: ['port'],
+      sevOrder: { 'sev-critical': 3, 'sev-warning': 2, 'sev-info': 1, 'sev-none': 0 },
+    });
+
+    wireTable({
+      tableId: 'findings-table', filterGroup: 'finding', searchId: null,
+      sevKey: 'fsev', sevSortKey: 'fsev', searchKeys: ['fhost'], numericKeys: ['fport'],
+      sevOrder: { 'fsev-critical': 4, 'fsev-high': 3, 'fsev-medium': 2, 'fsev-low': 1, 'fsev-info': 0 },
+    });
+  </script>
+
+</body>
+</html>
