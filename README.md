@@ -15,6 +15,21 @@
 
 Built for Hackathon Raptors' [Zero Dependency](https://zerodepshack.com/) hackathon — Track C, Web & Network.
 
+## 🎥 Demo
+
+<div align="center">
+
+<a href="https://vimeo.com/1222436952">
+  <img src="https://vumbnail.com/1222436952.jpg" alt="Watch the Bareport Demo" width="720">
+</a>
+
+<br>
+
+<strong><a href="https://vimeo.com/1222436952">▶ Watch the full 5-minute Bareport demo on Vimeo</a></strong>
+
+</div>
+
+The demo showcases live reconnaissance, security findings, risk scoring, attack-surface analysis, the HTML report, local dashboard, and zero-dependency verification.
 
 [![ci](https://github.com/sadiapeerzada/Bareport/actions/workflows/ci.yml/badge.svg)](https://github.com/sadiapeerzada/Bareport/actions/workflows/ci.yml)
 ![Go Version](https://img.shields.io/badge/go-1.22.2-00ADD8?logo=go&logoColor=white)
