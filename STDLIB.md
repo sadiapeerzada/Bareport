@@ -11,6 +11,12 @@ after the fact — the ordering below roughly follows build order.
 
 ## Substitution table (19 entries, Package Killer bonus target)
 
+Seven of these nineteen replace named packages whose own combined 
+import counts (per pkg.go.dev, checked live while writing this file) 
+total roughly **497,000** — including three of the highest-importer-count 
+packages in the entire Go ecosystem: `sirupsen/logrus` (239,958), 
+`spf13/cobra` (195,884), and `fatih/color` (27,995).
+
 | # | Would normally reach for | stdlib substitute | Rationale |
 |---|---|---|---|
 | 1 | **`fatih/color`** — the de facto standard Go terminal-color package. Per pkg.go.dev (checked live while writing this file, https://pkg.go.dev/github.com/fatih/color), it is imported by **27,995** other packages — used for exactly the colorized severity/state output this tool needs | `report/color.go`: raw ANSI escape codes (`"\033[31m"` etc.) + a hand-rolled TTY check (`os.Stdout.Stat()`, testing `info.Mode() & os.ModeCharDevice`) | `fatih/color` itself is a thin wrapper around ANSI codes and an isatty check — both trivial to inline directly, and inlining removes the dependency entirely with no loss of functionality for our fixed severity/state palette. |
