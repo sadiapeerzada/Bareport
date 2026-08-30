@@ -976,6 +976,14 @@ it or leave it out. Beyond that:
 See **[IMPROVEMENTS.md](./IMPROVEMENTS.md)** for a prioritized list of
 open improvement areas if you're looking for where to start.
 
+## 📝 Write-up
+
+**156 Imports, Zero Elsewhere: What It Actually Takes to Prove a Go Program Has No Dependencies**
+
+A detailed devlog covering how Bareport was built as a network security scanner with **zero third-party runtime dependencies**, including its self-verifying dependency audit, testing strategy, security findings engine, standard-library replacements, reproducible builds, and the real bugs discovered through end-to-end testing.
+
+**[📖 Read the full write-up on DEV Community](https://dev.to/sadia_peerzada/156-imports-zero-elsewhere-what-it-actually-takes-to-prove-a-go-program-has-no-dependencies-5cac)**
+
 ## License
 
 See [`LICENSE`](./LICENSE) for terms.
