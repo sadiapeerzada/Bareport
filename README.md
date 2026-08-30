@@ -69,9 +69,10 @@ OK: exactly one module in the build graph (zero third-party dependencies)
 $ bareport --verify-zero-dep
 bareport zero-dependency self-audit
 
-go.mod: module bareport, go 1.22.2, 0 require lines
-imports walked: 156
-outside stdlib: 0
+  go.mod:               module bareport, go
+1.22.2, 0 require lines
+  imports walked:       156
+  outside stdlib:       0
 
 VERIFIED — zero third-party runtime dependencies
 $ echo $?
