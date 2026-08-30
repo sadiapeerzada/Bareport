@@ -553,6 +553,7 @@ The self-contained HTML report provides a clear security assessment with risk sc
 </table>
 
 </div>
+
 ## Reports
 
 ```bash
