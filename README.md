@@ -11,7 +11,7 @@
 
 > **Development Timeline / Proof**
 >
-> Development on Bareport began on **August 28, 2026**. The screenshots below provide evidence of the project and its development history prior to submission.
+> Development on Bareport began on **August 28, 2026**. The initial commit was made later to establish the project clearly in the repository, which is why the initial commit may appear larger than expected.
 >
 > ![Development history](./proof-1.png)
 >
