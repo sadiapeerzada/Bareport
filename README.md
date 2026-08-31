@@ -9,6 +9,14 @@
         zero third-party dependencies. always.
 ```
 
+> **Development Timeline / Proof**
+>
+> Development on Bareport began on **August 28, 2026**. The screenshots below provide evidence of the project and its development history prior to submission.
+>
+> ![Development history](./proof-1.png)
+>
+> ![Repository history](./proof-2.png)
+
 # bareport
 
 **A zero-dependency network security assessment tool, built entirely on the Go standard library.**
