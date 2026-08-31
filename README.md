@@ -13,7 +13,7 @@
 >
 > Development on Bareport began on **August 28, 2026**. The initial commit was made later to establish the project clearly in the repository, which is why the initial commit may appear larger than expected.
 >
-> ![Development history](./proof-1.png)
+> ![Development history](./proof_1.png)
 >
 > ![Repository history](./proof-2.png)
 
